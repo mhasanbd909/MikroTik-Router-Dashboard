@@ -1,8 +1,9 @@
 # MikroTik Router Dashboard
 
-A PHP-based web dashboard for monitoring and managing MikroTik routers via the RouterOS API.
+A Python-based web dashboard for monitoring and managing MikroTik routers via the RouterOS API.
 
-![MikroTik Dashboard](https://img.shields.io/badge/PHP-8.0+-purple.svg)
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Flask](https://img.shields.io/badge/Flask-2.0+-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## Features
@@ -15,13 +16,14 @@ A PHP-based web dashboard for monitoring and managing MikroTik routers via the R
   - 🛡️ Firewall Rules
   - 📡 PPPoE Active Clients
   - 💻 CPU Status
-- **Quick Query Tool** - Run custom RouterOS commands
+- **Quick Query Tool** - Run custom RouterOS commands via API
 - **Responsive Design** - Works on desktop and mobile
+- **Python/Flask Backend** - Lightweight and extensible
 
 ## Requirements
 
-- PHP 8.0 or higher
-- XAMPP or similar local server
+- Python 3.8 or higher
+- Flask 2.0+
 - MikroTik router with API service enabled
 - Network access to the router
 
@@ -29,13 +31,14 @@ A PHP-based web dashboard for monitoring and managing MikroTik routers via the R
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url> mikrotik-dashboard
-   cd mikrotik-dashboard
+   git clone https://github.com/mhasanbd909/MikroTik-Router-Dashboard.git
+   cd MikroTik-Router-Dashboard
    ```
 
-2. **Configure your web server**
-   - For XAMPP: Copy files to `C:\xampp\htdocs\mikrotik\`
-   - For Linux: Copy to `/var/www/html/mikrotik/`
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. **Enable MikroTik API service**
    ```
@@ -43,26 +46,36 @@ A PHP-based web dashboard for monitoring and managing MikroTik routers via the R
    /ip service enable api
    ```
 
-4. **Access the dashboard**
-   - Open: `http://localhost/mikrotik/`
+4. **Run the application**
+   ```bash
+   python app.py
+   ```
+
+5. **Access the dashboard**
+   - Open: `http://localhost:5000/`
    - Enter your router IP, API port (default: 8728), username, and password
 
-## Configuration
+## API Endpoints
 
-Copy `config.sample.php` to `config.php` and modify if needed:
+The dashboard provides these REST API endpoints:
 
-```php
-define('ROUTER_HOST', '192.168.1.1');
-define('ROUTER_PORT', 8728);
-define('DEFAULT_USER', 'admin');
-define('DEFAULT_PASS', '');
-define('CONNECTION_TIMEOUT', 10);
-define('DEBUG_MODE', false);
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Main dashboard |
+| `/login` | POST | Connect to router |
+| `/logout` | GET | Disconnect from router |
+| `/query` | GET | Quick command query tool |
+| `/api/system` | GET | System resource info |
+| `/api/interfaces` | GET | Network interfaces |
+| `/api/addresses` | GET | IP addresses |
+| `/api/firewall` | GET | Firewall rules |
+| `/api/pppoe` | GET | PPPoE servers & active clients |
+| `/api/cpu` | GET | CPU status |
+| `/api/execute` | POST | Execute custom command |
 
 ## Quick Query Tool
 
-Access `query.php` for direct RouterOS command execution:
+Access `/query` for direct RouterOS command execution:
 - Enter commands in path/parameter format
 - Click preset buttons for common commands
 - View raw and parsed responses
@@ -72,22 +85,12 @@ Example command:
 /system/resource/print
 ```
 
-## API Endpoints (AJAX)
-
-The dashboard uses these API actions:
-- `?action=system` - System resource info
-- `?action=interfaces` - Network interfaces
-- `?action=dhcp` - DHCP leases
-- `?action=firewall` - Firewall rules
-- `?action=addresses` - IP addresses
-- `?action=hotspot` - Hotspot users
-
 ## Security Notes
 
-- Never commit `config.php` with real credentials
 - Use SSL (port 8729) for production deployments
 - Implement proper session management for production use
 - Consider adding IP-based access restrictions
+- Never expose the dashboard to untrusted networks
 
 ## Troubleshooting
 
@@ -95,11 +98,25 @@ The dashboard uses these API actions:
 - Verify router IP address is correct
 - Check firewall allows port 8728
 - Ensure API service is enabled on router
+- Check network connectivity to router
 
 **Login Failed**
 - Verify username and password
 - Check router user permissions
-- Enable DEBUG_MODE in config.php for detailed logs
+- Ensure API access is allowed for the user
+
+## Architecture
+
+```
+mikrotik/
+├── MikroTikAPI.py      # RouterOS API communication class
+├── app.py              # Flask application with routes
+├── requirements.txt    # Python dependencies
+└── templates/
+    ├── login.html      # Login form
+    ├── index.html      # Main dashboard
+    └── query.html      # Query tool
+```
 
 ## License
 

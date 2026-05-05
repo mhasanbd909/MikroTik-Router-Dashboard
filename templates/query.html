@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Query Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Consolas', monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+        h1 { margin-bottom: 20px; color: #667eea; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #888; }
+        textarea { width: 100%; height: 100px; background: #16213e; border: 1px solid #2a3a5a; color: #fff; padding: 10px; border-radius: 8px; font-family: inherit; }
+        button { background: #667eea; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #5568d3; }
+        .presets { margin-bottom: 20px; }
+        .preset-btn { background: #16213e; color: #888; padding: 6px 12px; margin: 3px; border-radius: 6px; cursor: pointer; font-size: 12px; border: 1px solid #2a3a5a; }
+        .preset-btn:hover { background: #1f2f50; color: #fff; }
+        .output { background: #0f0f1a; padding: 15px; border-radius: 8px; margin-top: 20px; overflow-x: auto; }
+        .output h3 { color: #667eea; margin-bottom: 10px; }
+        pre { white-space: pre-wrap; font-size: 13px; }
+        .error { color: #e74c3c; margin-bottom: 15px; }
+        .section { margin-bottom: 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .back-btn { background: #16213e; color: #888; padding: 10px 20px; border-radius: 8px; text-decoration: none; }
+        .back-btn:hover { background: #1f2f50; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔧 MikroTik Query Tool</h1>
+        <div>
+            <a href="/query?logout" class="back-btn" style="margin-right: 10px;">Logout</a>
+            <a href="/" class="back-btn">← Back to Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="presets">
+            <label>Quick Commands:</label>
+            <button class="preset-btn" onclick="setCommand('/system/resource/print')">/system/resource/print</button>
+            <button class="preset-btn" onclick="setCommand('/interface/print')">/interface/print</button>
+            <button class="preset-btn" onclick="setCommand('/ip/address/print')">/ip/address/print</button>
+            <button class="preset-btn" onclick="setCommand('/ip/firewall/filter/print')">/ip/firewall/filter/print</button>
+            <button class="preset-btn" onclick="setCommand('/ip/firewall/nat/print')">/ip/firewall/nat/print</button>
+            <button class="preset-btn" onclick="setCommand('/interface/pppoe-server/print')">/interface/pppoe-server/print</button>
+            <button class="preset-btn" onclick="setCommand('/interface/pppoe-server/active/print')">/interface/pppoe-server/active/print</button>
+            <button class="preset-btn" onclick="setCommand('/system/health/print')">/system/health/print</button>
+            <button class="preset-btn" onclick="setCommand('/queue/simple/print')">/queue/simple/print</button>
+        </div>
+        
+        <form id="queryForm">
+            <div class="form-group">
+                <label>Command (path on first line, params on following lines):</label>
+                <textarea name="command" id="commandInput" placeholder="/system/resource/print
+name=value">/system/resource/print</textarea>
+            </div>
+            <button type="submit">Execute Command</button>
+        </form>
+    </div>
+    
+    <div id="outputArea"></div>
+    
+    <script>
+        function setCommand(cmd) {
+            document.getElementById('commandInput').value = cmd;
+        }
+        
+        document.getElementById('queryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const command = document.getElementById('commandInput').value;
+            
+            const outputArea = document.getElementById('outputArea');
+            outputArea.innerHTML = '<div style="color:#888;padding:20px;">Executing command...</div>';
+            
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    outputArea.innerHTML = '<div class="error">Error: ' + data.error + '</div>';
+                    return;
+                }
+                
+                let html = '<div class="output"><h3>Command: ' + data.command + '</h3>';
+                html += '<h3 style="margin-top:20px;">Raw Response:</h3><pre>' + data.raw.join('\\n') + '</pre>';
+                html += '<h3 style="margin-top:20px;">Parsed Data (' + data.parsed.length + ' records):</h3><pre>' + JSON.stringify(data.parsed, null, 2) + '</pre></div>';
+                outputArea.innerHTML = html;
+            } catch (err) {
+                outputArea.innerHTML = '<div class="error">Error: ' + err + '</div>';
+            }
+        });
+    </script>
+</body>
+</html>

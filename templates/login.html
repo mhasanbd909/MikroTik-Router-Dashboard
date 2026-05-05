@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Router Dashboard - Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee; 
+            min-height: 100vh; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-box { 
+            background: #16213e; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            color: #667eea;
+        }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #888; }
+        input { 
+            width: 100%; 
+            padding: 12px 15px; 
+            background: #0f0f1a; 
+            border: 1px solid #2a3a5a; 
+            border-radius: 8px; 
+            color: #fff; 
+            font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+        button { 
+            width: 100%; 
+            padding: 14px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            border: none; 
+            border-radius: 8px; 
+            color: #fff; 
+            font-size: 16px; 
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.02); }
+        .error { 
+            background: rgba(231, 76, 60, 0.2); 
+            color: #e74c3c; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>🔗 Connect to MikroTik</h2>
+        {% if error %}
+        <div class="error">⚠️ {{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="form-group">
+                <label>Router IP Address</label>
+                <input type="text" name="host" value="{{ host }}" placeholder="192.168.1.1" required>
+            </div>
+            <div class="form-group">
+                <label>Port</label>
+                <input type="number" name="port" value="{{ port }}" placeholder="8728" required>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" placeholder="admin" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" placeholder="••••••••" required>
+            </div>
+            <button type="submit">Connect</button>
+        </form>
+    </div>
+</body>
+</html>

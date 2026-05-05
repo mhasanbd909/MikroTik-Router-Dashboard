@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Router Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+        
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        .status { display: flex; align-items: center; gap: 15px; }
+        .status-item { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 20px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #2ecc71; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: #16213e; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .card h3 { color: #667eea; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .card .value { font-size: 32px; font-weight: bold; color: #fff; }
+        .card .label { color: #888; font-size: 12px; margin-top: 5px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+        .stat-box { background: #16213e; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-box .number { font-size: 24px; font-weight: bold; color: #667eea; }
+        .stat-box .text { color: #888; font-size: 12px; margin-top: 5px; }
+        
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { background: #16213e; padding: 12px 24px; border-radius: 8px 8px 0 0; cursor: pointer; transition: all 0.3s; border: none; color: #888; font-size: 14px; }
+        .tab:hover { background: #1f2f50; }
+        .tab.active { background: #667eea; color: #fff; }
+        
+        .content-area { background: #16213e; border-radius: 0 12px 12px 12px; padding: 20px; min-height: 400px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #2a3a5a; }
+        th { color: #667eea; font-weight: 600; font-size: 12px; text-transform: uppercase; }
+        tr:hover { background: #1f2f50; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-enabled { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+        .badge-disabled { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+        .refresh-btn { background: #667eea; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .refresh-btn:hover { background: #5568d3; }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner { border: 3px solid #2a3a5a; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .no-data { text-align: center; padding: 40px; color: #888; }
+        .logout-btn { background: rgba(231, 76, 60, 0.2); color: #e74c3c; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; }
+        .logout-btn:hover { background: rgba(231, 76, 60, 0.3); }
+        .query-link { background: rgba(102, 126, 234, 0.2); color: #667eea; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; }
+        .query-link:hover { background: rgba(102, 126, 234, 0.3); }
+        
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .header { flex-direction: column; gap: 15px; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📡 MikroTik Dashboard</h1>
+        <div class="status">
+            <div class="status-item">
+                <div class="status-dot"></div>
+                <span>Connected to {{ host }}:{{ port }}</span>
+            </div>
+            <a href="/query" class="query-link">🔧 Query Tool</a>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="cards" id="systemCards">
+            <div class="card">
+                <h3>🏠 Router Name</h3>
+                <div class="value" id="routerName">-</div>
+            </div>
+            <div class="card">
+                <h3>📦 Model</h3>
+                <div class="value" id="model">-</div>
+            </div>
+            <div class="card">
+                <h3>💻 Architecture</h3>
+                <div class="value" id="arch">-</div>
+            </div>
+            <div class="card">
+                <h3>📶 Uptime</h3>
+                <div class="value" id="uptime">-</div>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="number" id="cpuLoad">-</div>
+                <div class="text">CPU Load %</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="freeMemory">-</div>
+                <div class="text">Free Memory</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="totalMemory">-</div>
+                <div class="text">Total Memory</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="version">-</div>
+                <div class="text">RouterOS Version</div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" data-tab="interfaces">🌐 Interfaces</button>
+            <button class="tab" data-tab="addresses">🔢 IP Addresses</button>
+            <button class="tab" data-tab="firewall">🛡️ Firewall</button>
+            <button class="tab" data-tab="pppoe">📡 PPPoE Active</button>
+            <button class="tab" data-tab="cpu">💻 CPU Status</button>
+        </div>
+        
+        <div class="content-area">
+            <div class="section-title">
+                <h2 id="tabTitle">Network Interfaces</h2>
+                <button class="refresh-btn" onclick="loadTab(currentTab)">🔄 Refresh</button>
+            </div>
+            <div id="tabContent">
+                <div class="loading"><div class="spinner"></div>Loading...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentTab = 'interfaces';
+        
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTab = tab.dataset.tab;
+                loadTab(currentTab);
+            });
+        });
+        
+        function loadTab(tab) {
+            const content = document.getElementById('tabContent');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+            
+            fetch(`/api/${tab}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) {
+                        content.innerHTML = `<div class="error" style="background:rgba(231,76,60,0.2);color:#e74c3c;padding:15px;border-radius:8px;">⚠️ ${data.error}</div>`;
+                        return;
+                    }
+                    switch(tab) {
+                        case 'interfaces': document.getElementById('tabTitle').textContent = 'Network Interfaces'; renderInterfaces(data.data); break;
+                        case 'firewall': document.getElementById('tabTitle').textContent = 'Firewall Rules'; renderFirewall(data.data); break;
+                        case 'addresses': document.getElementById('tabTitle').textContent = 'IP Addresses'; renderAddresses(data.data); break;
+                        case 'pppoe': document.getElementById('tabTitle').textContent = 'PPPoE Active Clients'; renderPPPoE(data); break;
+                        case 'cpu': document.getElementById('tabTitle').textContent = 'CPU Status'; renderCPU(data.data); break;
+                    }
+                })
+                .catch(err => { content.innerHTML = `<div class="error" style="background:rgba(231,76,60,0.2);color:#e74c3c;padding:15px;border-radius:8px;">⚠️ Error: ${err}</div>`; });
+        }
+        
+        function loadSystemInfo() {
+            fetch('/api/system')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const d = data.data;
+                        document.getElementById('routerName').textContent = d['name'] || '-';
+                        document.getElementById('model').textContent = d['model'] || '-';
+                        document.getElementById('arch').textContent = d['architecture-name'] || '-';
+                        document.getElementById('uptime').textContent = formatUptime(d['uptime'] || '');
+                        document.getElementById('cpuLoad').textContent = (d['cpu-load'] || '0') + '%';
+                        document.getElementById('freeMemory').textContent = formatBytes(d['free-memory'] || 0);
+                        document.getElementById('totalMemory').textContent = formatBytes(d['total-memory'] || 0);
+                        document.getElementById('version').textContent = d['version'] || '-';
+                    }
+                })
+                .catch(() => { document.getElementById('routerName').textContent = 'Offline'; });
+        }
+        
+        function renderInterfaces(data) {
+            if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No interfaces found</div>'; return; }
+            let html = '<table><thead><tr><th>Name</th><th>Type</th><th>Status</th><th>RX</th><th>TX</th></tr></thead><tbody>';
+            data.forEach(i => { html += `<tr><td><strong>${i.name || '-'}</strong></td><td>${i.type || '-'}</td><td><span class="badge ${i.disabled === 'true' ? 'badge-disabled' : 'badge-enabled'}">${i.disabled === 'true' ? 'Disabled' : 'Enabled'}</span></td><td>${formatBytes(i['rx-byte'] || 0)}</td><td>${formatBytes(i['tx-byte'] || 0)}</td></tr>`; });
+            html += '</tbody></table>';
+            document.getElementById('tabContent').innerHTML = html;
+        }
+        
+        function renderFirewall(data) {
+            if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No firewall rules found</div>'; return; }
+            let html = '<table><thead><tr><th>#</th><th>Chain</th><th>Action</th><th>Src Address</th><th>Dst Address</th><th>Protocol</th><th>Disabled</th></tr></thead><tbody>';
+            data.forEach((f, i) => { html += `<tr><td>${i + 1}</td><td>${f.chain || '-'}</td><td><strong>${f.action || '-'}</strong></td><td>${f['src-address'] || '-'}</td><td>${f['dst-address'] || '-'}</td><td>${f.protocol || '-'}</td><td><span class="badge ${f.disabled === 'true' ? 'badge-disabled' : 'badge-enabled'}">${f.disabled === 'true' ? 'Yes' : 'No'}</span></td></tr>`; });
+            html += '</tbody></table>';
+            document.getElementById('tabContent').innerHTML = html;
+        }
+        
+        function renderAddresses(data) {
+            if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No IP addresses found</div>'; return; }
+            let html = '<table><thead><tr><th>Address</th><th>Network</th><th>Interface</th><th>Disabled</th></tr></thead><tbody>';
+            data.forEach(a => { html += `<tr><td><strong>${a.address || '-'}</strong></td><td>${a.network || '-'}</td><td>${a.interface || '-'}</td><td><span class="badge ${a.disabled === 'true' ? 'badge-disabled' : 'badge-enabled'}">${a.disabled === 'true' ? 'Yes' : 'No'}</span></td></tr>`; });
+            html += '</tbody></table>';
+            document.getElementById('tabContent').innerHTML = html;
+        }
+        
+        function renderPPPoE(data) {
+            const serverData = data.data || [];
+            const activeData = data.active || [];
+            
+            let html = '<h4 style="margin-bottom:15px;color:#667eea;">PPPoE Servers: ' + serverData.length + '</h4>';
+            if (serverData.length) {
+                html += '<table><thead><tr><th>Name</th><th>Interface</th><th>Service Name</th><th>Status</th></tr></thead><tbody>';
+                serverData.forEach(s => { 
+                    html += '<tr><td><strong>' + (s.name || '-') + '</strong></td><td>' + (s.interface || '-') + '</td><td>' + (s['service-name'] || '-') + '</td><td><span class="badge ' + (s.disabled === 'true' ? 'badge-disabled' : 'badge-enabled') + '">' + (s.disabled === 'true' ? 'Disabled' : 'Enabled') + '</span></td></tr>';
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<div class="no-data">No PPPoE servers configured</div>';
+            }
+            
+            html += '<h4 style="margin:20px 0 15px;color:#667eea;">Active PPPoE Clients: ' + activeData.length + '</h4>';
+            if (activeData.length) {
+                html += '<table><thead><tr><th>User</th><th>Service Name</th><th>Session ID</th><th>Uptime</th><th>Bytes In</th><th>Bytes Out</th></tr></thead><tbody>';
+                activeData.forEach(a => { 
+                    html += '<tr><td><strong>' + (a.name || '-') + '</strong></td><td>' + (a['service-name'] || '-') + '</td><td>' + (a['session-id'] || '-') + '</td><td>' + (a['uptime'] || '-') + '</td><td>' + formatBytes(a['bytes-in'] || 0) + '</td><td>' + formatBytes(a['bytes-out'] || 0) + '</td></tr>';
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<div class="no-data">No active PPPoE clients</div>';
+            }
+            
+            document.getElementById('tabContent').innerHTML = html;
+        }
+        
+        function renderCPU(data) {
+            let html = '<div class="cards"><div class="card"><h3>📊 CPU Load</h3><div class="value">' + (data['cpu-load'] || '0') + '%</div></div>';
+            html += '<div class="card"><h3>🏭 CPU Count</h3><div class="value">' + (data['cpu-count'] || '-') + '</div></div>';
+            html += '<div class="card"><h3>🔥 CPU Temperature</h3><div class="value">' + (data['cpu-temperature'] || 'N/A') + '</div></div>';
+            html += '<div class="card"><h3>⏱️ CPU Frequency</h3><div class="value">' + (data['cpu-frequency'] || 'N/A') + '</div></div></div>';
+            html += '<div style="margin-top:20px;"><h4 style="color:#667eea;margin-bottom:10px;">Additional Info:</h4>';
+            html += '<table><tr><td><strong>Board Name:</strong></td><td>' + (data['board-name'] || '-') + '</td></tr>';
+            html += '<tr><td><strong>Model:</strong></td><td>' + (data['model'] || '-') + '</td></tr>';
+            html += '<tr><td><strong>Architecture:</strong></td><td>' + (data['architecture-name'] || '-') + '</td></tr>';
+            html += '<tr><td><strong>RouterOS:</strong></td><td>' + (data['version'] || '-') + '</td></tr>';
+            html += '<tr><td><strong>Uptime:</strong></td><td>' + (data['uptime'] || '-') + '</td></tr></table></div>';
+            document.getElementById('tabContent').innerHTML = html;
+        }
+        
+        function formatBytes(bytes) {
+            bytes = parseInt(bytes) || 0;
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return bytes + ' B';
+        }
+        
+        function formatUptime(uptime) {
+            if (!uptime) return '-';
+            const regex = /(\d+)w|(\d+)d|(\d+)h|(\d+)m|(\d+)s/g;
+            let match, result = [];
+            while ((match = regex.exec(uptime)) !== null) {
+                if (match[1]) result.push(match[1] + 'w');
+                if (match[2]) result.push(match[2] + 'd');
+                if (match[3]) result.push(match[3] + 'h');
+                if (match[4]) result.push(match[4] + 'm');
+            }
+            return result.slice(0, 4).join(' ') || uptime;
+        }
+        
+        loadSystemInfo();
+        loadTab('interfaces');
+        setInterval(() => { loadSystemInfo(); loadTab(currentTab); }, 30000);
+    </script>
+</body>
+</html>
