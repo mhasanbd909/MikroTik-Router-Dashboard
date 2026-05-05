@@ -11,10 +11,10 @@ A PHP-based web dashboard for monitoring and managing MikroTik routers via the R
 - **Dynamic Credentials** - Login form for entering router credentials (no hardcoding required)
 - **Multiple Views**:
   - 🌐 Network Interfaces
-  - 📱 DHCP Leases
-  - 🛡️ Firewall Rules
   - 🔢 IP Addresses
-  - 🔥 Hotspot Active Users
+  - 🛡️ Firewall Rules
+  - 📡 PPPoE Active Clients
+  - 💻 CPU Status
 - **Quick Query Tool** - Run custom RouterOS commands
 - **Responsive Design** - Works on desktop and mobile
 
