@@ -1,0 +1,21 @@
+# Ignore sensitive files
+config.php
+*.log
+.DS_Store
+
+# Puku AI workspace
+.puku/
+
+# Ignore Composer/Vendor (if using later)
+/vendor/
+/composer.phar
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
