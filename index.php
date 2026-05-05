@@ -75,11 +75,6 @@ if (isset($_GET['action']) && $isConnected) {
                 echo json_encode(['success' => true, 'data' => $data]);
                 break;
                 
-            case 'dhcp':
-                $data = $api->query('/ip/dhcp-server/lease/print');
-                echo json_encode(['success' => true, 'data' => $data]);
-                break;
-                
             case 'firewall':
                 $data = $api->query('/ip/firewall/filter/print');
                 echo json_encode(['success' => true, 'data' => $data]);
@@ -90,9 +85,15 @@ if (isset($_GET['action']) && $isConnected) {
                 echo json_encode(['success' => true, 'data' => $data]);
                 break;
                 
-            case 'hotspot':
-                $data = $api->query('/ip/hotspot/active/print');
-                echo json_encode(['success' => true, 'data' => $data]);
+            case 'pppoe':
+                $data = $api->query('/interface/pppoe-client/print');
+                $activeData = $api->query('/interface/pppoe-server/active/print');
+                echo json_encode(['success' => true, 'data' => $data, 'active' => $activeData]);
+                break;
+                
+            case 'cpu':
+                $data = $api->query('/system/resource/print');
+                echo json_encode(['success' => true, 'data' => $data[0] ?? []]);
                 break;
                 
             case 'check':
@@ -261,10 +262,10 @@ if (isset($_GET['action']) && $isConnected) {
             
             <div class="tabs">
                 <button class="tab active" data-tab="interfaces">🌐 Interfaces</button>
-                <button class="tab" data-tab="dhcp">📱 DHCP Leases</button>
-                <button class="tab" data-tab="firewall">🛡️ Firewall</button>
                 <button class="tab" data-tab="addresses">🔢 IP Addresses</button>
-                <button class="tab" data-tab="hotspot">🔥 Hotspot</button>
+                <button class="tab" data-tab="firewall">🛡️ Firewall</button>
+                <button class="tab" data-tab="pppoe">📡 PPPoE Active</button>
+                <button class="tab" data-tab="cpu">💻 CPU Status</button>
             </div>
             
             <div class="content-area">
@@ -303,10 +304,10 @@ if (isset($_GET['action']) && $isConnected) {
                         }
                         switch(tab) {
                             case 'interfaces': document.getElementById('tabTitle').textContent = 'Network Interfaces'; renderInterfaces(data.data); break;
-                            case 'dhcp': document.getElementById('tabTitle').textContent = 'DHCP Leases'; renderDHCP(data.data); break;
                             case 'firewall': document.getElementById('tabTitle').textContent = 'Firewall Rules'; renderFirewall(data.data); break;
                             case 'addresses': document.getElementById('tabTitle').textContent = 'IP Addresses'; renderAddresses(data.data); break;
-                            case 'hotspot': document.getElementById('tabTitle').textContent = 'Hotspot Active Users'; renderHotspot(data.data); break;
+                            case 'pppoe': document.getElementById('tabTitle').textContent = 'PPPoE Active Clients'; renderPPPoE(data.data, data.active); break;
+                            case 'cpu': document.getElementById('tabTitle').textContent = 'CPU Status'; renderCPU(data.data); break;
                         }
                     })
                     .catch(err => { content.innerHTML = `<div class="error-msg">⚠️ Error: ${err}</div>`; });
@@ -339,11 +340,24 @@ if (isset($_GET['action']) && $isConnected) {
                 document.getElementById('tabContent').innerHTML = html;
             }
             
-            function renderDHCP(data) {
-                if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No DHCP leases found</div>'; return; }
-                let html = '<table><thead><tr><th>IP Address</th><th>MAC Address</th><th>Hostname</th><th>Status</th><th>Expires</th></tr></thead><tbody>';
-                data.forEach(d => { html += `<tr><td>${d['address'] || '-'}</td><td>${d['mac-address'] || '-'}</td><td>${d['host-name'] || '-'}</td><td><span class="badge ${d['status'] === 'bound' ? 'badge-enabled' : 'badge-disabled'}">${d['status'] || '-'}</span></td><td>${d['expires-after'] || '-'}</td></tr>`; });
+            function renderPPPoE(data, activeData) {
+                if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No PPPoE clients found</div>'; return; }
+                let html = '<table><thead><tr><th>Name</th><th>Interface</th><th>Status</th><th>User</th><th>IP Address</th><th>Uptime</th></tr></thead><tbody>';
+                data.forEach(p => { 
+                    const isRunning = p['running'] === 'true';
+                    html += `<tr><td><strong>${p.name || '-'}</strong></td><td>${p.interface || '-'}</td><td><span class="badge ${isRunning ? 'badge-enabled' : 'badge-disabled'}">${isRunning ? 'Connected' : 'Disconnected'}</span></td><td>${p.user || '-'}</td><td>${p['ip-address'] || '-'}</td><td>${p['uptime'] || '-'}</td></tr>`; 
+                });
                 html += '</tbody></table>';
+                
+                if (activeData && activeData.length) {
+                    html += '<h3 style="margin-top: 20px; color: #667eea;">Active PPPoE Sessions</h3>';
+                    html += '<table><thead><tr><th>User</th><th>IP Address</th><th>MAC Address</th><th>Session ID</th><th>Uptime</th></tr></thead><tbody>';
+                    activeData.forEach(a => {
+                        html += `<tr><td><strong>${a.user || '-'}</strong></td><td>${a['ip-address'] || '-'}</td><td>${a['mac-address'] || '-'}</td><td>${a['session-id'] || '-'}</td><td>${a['uptime'] || '-'}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                }
+                
                 document.getElementById('tabContent').innerHTML = html;
             }
             
@@ -363,10 +377,20 @@ if (isset($_GET['action']) && $isConnected) {
                 document.getElementById('tabContent').innerHTML = html;
             }
             
-            function renderHotspot(data) {
-                if (!data.length) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No active hotspot users</div>'; return; }
-                let html = '<table><thead><tr><th>User</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th><th>Bytes In</th><th>Bytes Out</th></tr></thead><tbody>';
-                data.forEach(h => { html += `<tr><td><strong>${h.user || '-'}</strong></td><td>${h['ip-address'] || '-'}</td><td>${h['mac-address'] || '-'}</td><td>${h['uptime'] || '-'}</td><td>${formatBytes(h['bytes-in'] || 0)}</td><td>${formatBytes(h['bytes-out'] || 0)}</td></tr>`; });
+            function renderCPU(data) {
+                if (!data || Object.keys(data).length === 0) { document.getElementById('tabContent').innerHTML = '<div class="no-data">No CPU data available</div>'; return; }
+                let html = '<table><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>';
+                html += `<tr><td><strong>CPU Load</strong></td><td>${data['cpu-load'] || '-'}%</td></tr>`;
+                html += `<tr><td><strong>CPU Count</strong></td><td>${data['cpu-count'] || '-'}</td></tr>`;
+                html += `<tr><td><strong>Free Memory</strong></td><td>${formatBytes(data['free-memory'] || 0)}</td></tr>`;
+                html += `<tr><td><strong>Total Memory</strong></td><td>${formatBytes(data['total-memory'] || 0)}</td></tr>`;
+                html += `<tr><td><strong>Free HDD Space</strong></td><td>${formatBytes(data['free-hdd-space'] || 0)}</td></tr>`;
+                html += `<tr><td><strong>Total HDD Space</strong></td><td>${formatBytes(data['total-hdd-space'] || 0)}</td></tr>`;
+                html += `<tr><td><strong>Uptime</strong></td><td>${formatUptime(data['uptime'] || '')}</td></tr>`;
+                html += `<tr><td><strong>Board Name</strong></td><td>${data['board-name'] || '-'}</td></tr>`;
+                html += `<tr><td><strong>Model</strong></td><td>${data['model'] || '-'}</td></tr>`;
+                html += `<tr><td><strong>Version</strong></td><td>${data['version'] || '-'}</td></tr>`;
+                html += `<tr><td><strong>Architecture</strong></td><td>${data['architecture-name'] || '-'}</td></tr>`;
                 html += '</tbody></table>';
                 document.getElementById('tabContent').innerHTML = html;
             }
