@@ -19,3 +19,15 @@ config.php
 # Environment files
 .env
 .env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.exe
+*.msi
+venv/
+env/
+.venv/
