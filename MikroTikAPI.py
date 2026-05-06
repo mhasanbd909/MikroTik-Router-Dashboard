@@ -5,11 +5,10 @@ A Python class for connecting to MikroTik routers using the RouterOS API protoco
 """
 
 import socket
-import binascii
 import hashlib
 import base64
-import time
 from typing import List, Dict, Optional, Any
+
 
 class MikroTikAPI:
     """MikroTik RouterOS API connection class"""
@@ -37,7 +36,30 @@ class MikroTikAPI:
         self.password = password
         self.timeout = timeout
         self.socket = None
+        self.logged_in = False
         
+    def _write_length(self, length: int) -> bytes:
+        """Encode length for RouterOS API protocol"""
+        if length < 0x80:
+            return bytes([length])
+        else:
+            # Multi-byte length encoding
+            return bytes([
+                0x80 | ((length >> 24) & 0x7F),
+                (length >> 16) & 0xFF,
+                (length >> 8) & 0xFF,
+                length & 0xFF
+            ])
+    
+    def _read_length(self, first_byte: int) -> int:
+        """Decode length from RouterOS API protocol"""
+        length = first_byte
+        if length >= 0x80:
+            # Read 3 more bytes
+            remaining = self.socket.recv(3)
+            length = ((length & 0x7F) << 24) | (remaining[0] << 16) | (remaining[1] << 8) | remaining[2]
+        return length
+    
     def connect(self) -> bool:
         """Connect to the MikroTik router"""
         try:
@@ -48,7 +70,7 @@ class MikroTikAPI:
             # Login
             if not self.login():
                 self.disconnect()
-                raise Exception("Login failed. Check username/password.")
+                raise Exception("Login failed. Check username/password or API service is enabled.")
             
             return True
         except socket.timeout:
@@ -56,48 +78,120 @@ class MikroTikAPI:
         except socket.error as e:
             raise Exception(f"Connection failed: {e}")
     
-    def login(self) -> bool:
-        """Login to the router"""
-        # Send login request
-        response = self.send_command('/login')
-        
-        # Extract challenge hash
-        hash_data = ''
-        for line in response:
-            if '=ret=' in line:
-                hash_data = line.split('=ret=')[1].strip()
-                break
-        
-        if not hash_data:
-            # Try plain login for older routers
-            response = self.send_command('/login', {'name': self.user, 'password': self.password})
-            for line in response:
-                if '=ret=' in line or self.OK in line:
-                    return True
-            return False
-        
-        # Decode hash if base64
+    def _send_word(self, word: str):
+        """Send length-prefixed word"""
+        word_bytes = word.encode('utf-8')
+        self.socket.sendall(self._write_length(len(word_bytes)) + word_bytes)
+    
+    def _read_word(self) -> Optional[str]:
+        """Read length-prefixed word"""
         try:
-            hash_binary = base64.b64decode(hash_data)
-        except Exception:
-            hash_binary = hash_data.encode()
+            first_byte = self.socket.recv(1)
+            if not first_byte:
+                return None
+            
+            length = self._read_length(first_byte[0])
+            
+            if length == 0:
+                return ''
+            
+            # Read data
+            data = b''
+            while len(data) < length:
+                chunk = self.socket.recv(length - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+            
+            return data.decode('utf-8', errors='replace')
+        except socket.timeout:
+            return None
+    
+    def login(self) -> bool:
+        """Login to the router using RouterOS API protocol"""
+        # Read tagline (MikroTik router sends version info)
+        try:
+            self.socket.settimeout(5)
+            while True:
+                word = self._read_word()
+                if word is None or word == '' or (word and word.startswith('!')):
+                    break
+        except socket.timeout:
+            pass
         
-        # Calculate MD5: null byte + password + challenge
-        password_bytes = self.password.encode('utf-8')
-        md5_input = b'\x00' + password_bytes + hash_binary
-        password_hash = hashlib.md5(md5_input).digest()
-        password_encoded = base64.b64encode(password_hash).decode('ascii')
+        # Send /login command
+        self._send_word('/login')
         
-        # Send login with encoded password
-        response = self.send_command('/login', {
-            'name': self.user,
-            'password': password_encoded
-        })
+        # Read challenge response
+        self.socket.settimeout(10)
+        challenge = None
         
-        # Check for success
-        for line in response:
-            if '=ret=' in line or self.OK in line:
-                return True
+        try:
+            response = self._read_word()
+            if response and '=ret=' in response:
+                challenge = response.split('=ret=')[1]
+        except socket.timeout:
+            pass
+        
+        if challenge:
+            # RouterOS v6 style: compute password hash
+            try:
+                hash_binary = base64.b64decode(challenge)
+            except Exception:
+                hash_binary = challenge.encode('utf-8')
+            
+            password_bytes = self.password.encode('utf-8')
+            md5_input = b'\x00' + password_bytes + hash_binary
+            password_hash = hashlib.md5(md5_input).digest()
+            password_encoded = base64.b64encode(password_hash).decode('ascii')
+            
+            # Send login with hashed password
+            self._send_word('/login')
+            self._send_word(f'=name={self.user}')
+            self._send_word(f'=password={password_encoded}')
+            self._send_word('')
+            
+            # Read response
+            try:
+                response = self._read_word()
+                if response and (response == '!done' or '=ret=' in response):
+                    self.logged_in = True
+                    return True
+            except socket.timeout:
+                pass
+        else:
+            # RouterOS v7 or plain login
+            self._send_word('/login')
+            self._send_word(f'=name={self.user}')
+            self._send_word(f'=password={self.password}')
+            self._send_word('')
+            
+            try:
+                response = self._read_word()
+                if response and response == '!done':
+                    self.logged_in = True
+                    return True
+            except socket.timeout:
+                pass
+        
+        # Try RouterOS v7 session token login
+        self._send_word('/login')
+        self._send_word(f'=name={self.user}')
+        self._send_word(f'=password={self.password}')
+        self._send_word('=_session=yes')
+        self._send_word('')
+        
+        try:
+            # Read responses until !done
+            while True:
+                response = self._read_word()
+                if response == '!done':
+                    self.logged_in = True
+                    return True
+                elif response is None:
+                    break
+        except socket.timeout:
+            pass
         
         return False
     
@@ -106,15 +200,16 @@ class MikroTikAPI:
         if not self.socket:
             raise Exception("Not connected to router")
         
-        # Build command string
-        cmd = command
+        # Send command word
+        self._send_word(command)
+        
+        # Send parameter words
         if params:
             for key, value in params.items():
-                cmd += f"\n={key}={self.escape_value(value)}"
-        cmd += "\n"
+                self._send_word(f'={key}={self.escape_value(value)}')
         
-        # Send command
-        self.socket.sendall(cmd.encode('utf-8'))
+        # End of command
+        self._send_word('')
         
         # Read response
         response = []
@@ -122,22 +217,14 @@ class MikroTikAPI:
         
         try:
             while True:
-                chunk = self.socket.recv(4096)
-                if not chunk:
+                word = self._read_word()
+                if word is None:
                     break
-                    
-                # Decode and split
-                data = chunk.decode('utf-8', errors='replace')
-                lines = data.split('\n')
                 
-                for line in lines:
-                    line = line.strip()
-                    if line:
-                        response.append(line)
-                        if line in [self.OK, self.TRAP, self.FATAL]:
-                            break
-                            
-                if response and response[-1] in [self.OK, self.TRAP, self.FATAL]:
+                if word:
+                    response.append(word)
+                
+                if word in [self.OK, self.TRAP, self.FATAL] or word is None:
                     break
                     
         except socket.timeout:
@@ -189,6 +276,7 @@ class MikroTikAPI:
             except Exception:
                 pass
             self.socket = None
+            self.logged_in = False
     
     def __enter__(self):
         """Context manager entry"""
